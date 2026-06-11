@@ -6,6 +6,8 @@ module top_systolic_fir #(
     parameter integer GUARD_BITS =  1,  // Number of guard bits
     parameter integer ACCW       = XW + CW + $clog2(NTAPS) + GUARD_BITS, // Accumulator width with guard bits
     parameter integer SHIFT      = 15, // Right shift after MAC (Q1.15 -> integer)
+    parameter integer USE_SYMMETRY = 1, // Whether to use symmetric coefficients optimization
+    parameter integer CHECK_SYMMETRY = 1, // Whether to check for symmetry in coefficients  
     parameter integer ROUND_TO_NEAREST = 1, // Whether to round to nearest after shifting
     parameter         COEF_FILE = "rrc_taps_q15_energy.mem" // Coefficient file
     )
@@ -61,6 +63,30 @@ module top_systolic_fir #(
             $display("Error: SHIFT must be less than ACCW to avoid shifting out all bits. 
             Given: SHIFT=%0d, ACCW=%0d", SHIFT, ACCW);
             $finish;
+        end
+
+        for (i = 0; i < NTAPS; i = i + 1) begin
+            coef_array[i] = {CW{1'b0}}; // Default to zero
+        end
+
+        // Load coefficients from file
+        $readmemh(COEF_FILE, coef_array);
+
+        // Check for symmetry if enabled
+        if ((USE_SYMMETRY != 0) && (CHECK_SYMMETRY != 0)) begin
+            symmetric_errors = 0;
+            for (i = 0; i < NTAPS/2; i = i + 1) begin
+                if (coef_array[i] !== coef_array[NTAPS-1-i]) begin
+                    $display("WARNING: Symmetry error! coef[%0d] = %h does not match coef[%0d] = %h",
+                             i, coef_array[i], NTAPS-1-i, coef_array[NTAPS-1-i]);
+                    symmetric_errors = symmetric_errors + 1;
+                end
+            end
+            if (symmetric_errors > 0) begin
+                $display("Total symmetry errors: %0d out of %0d pairs", symmetric_errors, NTAPS/2);
+            end else begin
+                $display("Coefficient symmetry check passed. All %0d pairs are symmetric.", NTAPS/2);
+            end
         end
     end
 
