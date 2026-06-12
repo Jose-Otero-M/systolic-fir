@@ -44,14 +44,12 @@ module top_systolic_fir #(
         end
 
         if (XW < 2 || CW < 2 || YW < 2) begin
-            $display("Error: Word widths must be at least 2 bits. 
-            Given: XW=%0d, CW=%0d, YW=%0d", XW, CW, YW);
+            $display("Error: Word widths must be at least 2 bits. Given: XW=%0d, CW=%0d, YW=%0d", XW, CW, YW);
             $finish;
         end
 
         if (ACCW < PW) begin
-            $display("Warning: ACCW may be too small to avoid overflow. 
-            Recommended ACCW >= %0d. Given: %0d", PW + $clog2(NTAPS) + GUARD_BITS, ACCW);
+            $display("Warning: ACCW may be too small to avoid overflow. Recommended ACCW >= %0d. Given: %0d", PW + $clog2(NTAPS) + GUARD_BITS, ACCW);
         end
 
         if (SHIFT < 0) begin
@@ -60,8 +58,7 @@ module top_systolic_fir #(
         end
 
         if (SHIFT >= ACCW) begin
-            $display("Error: SHIFT must be less than ACCW to avoid shifting out all bits. 
-            Given: SHIFT=%0d, ACCW=%0d", SHIFT, ACCW);
+            $display("Error: SHIFT must be less than ACCW to avoid shifting out all bits. Given: SHIFT=%0d, ACCW=%0d", SHIFT, ACCW);
             $finish;
         end
 
