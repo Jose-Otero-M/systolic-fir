@@ -1,4 +1,4 @@
-module top_systolic_fir #(
+module top_even_odd_symmetric_systolic_fir #(
     parameter integer NTAPS      = 33,  // Number of FIR taps
     parameter integer XW         = 16,  // Input data width
     parameter integer CW         = 16,  // Coefficient width (e.g., Q1.15)
@@ -87,6 +87,7 @@ module top_systolic_fir #(
         end
     end
 
-    
+    localparam integer DSP_STAGES = NTAPS; // Number of DSP stages in the systolic array
+    wire signed [ACCW-1:0] accumulator_chain [0:NTAPS-1];
 
 end module
