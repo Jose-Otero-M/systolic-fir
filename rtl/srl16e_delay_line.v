@@ -10,7 +10,7 @@ module srl16e_delay_line #(
     );
     
     // Constant function for ceiling division.
-    function integer ceil_div
+    function integer ceil_div;
         input integer numerator;
         input integer denominator;
 
