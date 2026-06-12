@@ -12,6 +12,7 @@ module top_even_odd_symmetric_systolic_fir #(
     parameter         COEF_FILE = "rrc_taps_q15_energy.mem" // Coefficient file
     )
     
+    
     (
     input wire clk, // clock
     input wire rst, // synchronous reset
