@@ -6,8 +6,14 @@ module top_even_odd_symmetric_systolic_fir #(
     parameter integer GUARD_BITS       =  1, // Number of guard bits
     parameter integer ACCW             = XW + CW + $clog2(NTAPS) + GUARD_BITS, // Accumulator width with guard bits
     parameter integer SHIFT            = 15, // Right shift after MAC (Q1.15 -> integer)
-    parameter integer USE_SYMMETRY     =  1, // Whether to use symmetric coefficients optimization
+
     parameter integer CHECK_SYMMETRY   =  1, // Whether to check for symmetry in coefficients  
+    parameter integer USE_SYMMETRY     =  1, // Whether to use symmetric coefficients optimization
+    parameter integer STRICT_SYMMETRY  =  1, 
+
+    parameter integer USE_SRL16E       =  1,
+
+    parameter integer SATURATE_OUTPUT  =  1,
     parameter integer ROUND_TO_NEAREST =  1, // Whether to round to nearest after shifting
     parameter         COEF_FILE        = "rrc_taps_q15_energy.mem" // Coefficient file
     )
@@ -30,7 +36,7 @@ module top_even_odd_symmetric_systolic_fir #(
     reg signed [CW-1:0] coef_array [0:NTAPS-1]; 
 
     integer i;
-    integer symmetric_errors;
+    integer symmetry_errors;
     localparam integer PW = XW + CW; // Product width before accumulation
 
 
@@ -74,22 +80,58 @@ module top_even_odd_symmetric_systolic_fir #(
 
         // Check for symmetry if enabled
         if ((USE_SYMMETRY != 0) && (CHECK_SYMMETRY != 0)) begin
-            symmetric_errors = 0;
+            symmetry_errors = 0;
             for (i = 0; i < NTAPS/2; i = i + 1) begin
                 if (coef_array[i] !== coef_array[NTAPS-1-i]) begin
                     $display("WARNING: Symmetry error! coef[%0d] = %h does not match coef[%0d] = %h", i, coef_array[i], NTAPS-1-i, coef_array[NTAPS-1-i]);
-                    symmetric_errors = symmetric_errors + 1;
+                    symmetry_errors = symmetry_errors + 1;
                 end
             end
-            if (symmetric_errors > 0) begin
-                $display("Total symmetry errors: %0d out of %0d pairs", symmetric_errors, NTAPS/2);
+            if (symmetry_errors > 0) begin
+                $display("Total symmetry errors: %0d out of %0d pairs", symmetry_errors, NTAPS/2);
             end else begin
                 $display("Coefficient symmetry check passed. All %0d pairs are symmetric.", NTAPS/2);
+            end
+
+            if ((symmetry_errors != 0) && (STRICT_SYMMETRY != 0)) begin
+                $display("ERROR: Coefficient symmetry check failed");
+                $display("       Disable STRICT_SYMMETRY or provide symmetryc coeficients");
+                $finish;
             end
         end
     end
 
-    localparam integer DSP_STAGES = NTAPS; // Number of DSP stages in the systolic array
-    wire signed [ACCW-1:0] accumulator_chain [0:NTAPS-1];
+
+    function integer ceil_div
+        input integer dividend;
+        input integer divisor;
+
+        begin
+            if ((dividend <= 0) || (divisor <= 0)) begin
+                ceil_div = 0;
+            end
+            else if((dividend % divisor) == 0) begin
+                ceil_div = dividend / divisor;
+            end 
+            else  begin
+                ceil_div = (dividend / divisor) + 1;
+            end
+        end
+    endfunction
+
+
+    localparam integer DSP_STAGES = ceil_div(NTAPS, 2); // Number of DSP stages in the systolic array
+    wire signed [ACCW-1:0] ACCUMULATOR_CHAIN [0:NTAPS-1];
+    
+    localparam integer SRL16_TOTAL_DELAYS = NTAPS;
+    localparam integer SRL16_TOTAL_STAGES = ceil_div(SRL16_TOTAL_DELAYS, 16);
+    localparam integer SRL16_CONTROL_DEPTH_WIDTH = 4;
+    //wire  [SRL16_CONTROL_DEPTH_WIDTH-1 : 0] srl16_depth_array [0 : SRL16_TOTAL_STAGES-1];
+    wire  [0 : (SRL16_TOTAL_STAGES * SRL16_CONTROL_DEPTH_WIDTH) - 1] srl16_depth_array;
+    
+    
+    //localparam integer LAST_SRL16 = ( (SRL16_TOTAL_DELAYS - (SRL16_COMPLEAT_STAGES * 16)) <= 0) ? 0 : (SRL16_TOTAL_DELAYS - (SRL16_COMPLEAT_STAGES * 16));
+
+
 
 endmodule
