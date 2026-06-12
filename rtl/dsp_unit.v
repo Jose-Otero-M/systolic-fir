@@ -97,7 +97,7 @@ module dsp_unit #(
         .clk(clk),
         .rst(rst),
         .en(en),
-        .data_in({ 1{coef_in[CW-1]}, coef_in }), // Sign-extend the coefficient input to match the pre-adder output width
+        .data_in({ {1{coef_in[CW-1]}}, coef_in }), // Sign-extend the coefficient input to match the pre-adder output width
         .data_out_flat(extended_coef_delayed_z1) // extended_coef_delayed_z1 is the delayed coefficient input
     );
 
@@ -106,7 +106,7 @@ module dsp_unit #(
     end
 
     delay_line_M_words_N_bits #(.M_STAGES(1), .N_BITS($bits(product))
-    ) u_z1_out_pre_adder(
+    ) u_z1_out_product(
         .clk(clk),
         .rst(rst),
         .en(en),
