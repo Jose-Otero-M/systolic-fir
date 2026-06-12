@@ -1,4 +1,4 @@
-module dsp_unit #(
+module last_dsp_unit_for_odd_taps #(
     parameter integer XW         = 16,
     parameter integer CW         = 16,
     parameter integer NTAPS      = 8,
