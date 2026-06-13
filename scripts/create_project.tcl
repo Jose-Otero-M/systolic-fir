@@ -3,7 +3,7 @@
 set script_dir [file dirname [file normalize [info script]]]
 set root_dir   [file normalize "$script_dir/.."]
 
-set project_name "srl16e_delay_line"
+set project_name "systolic_fir"
 set project_dir  "$root_dir/vivado_project"
 
 # Basys 3 FPGA part
@@ -89,7 +89,7 @@ if {[llength $xdc_files] > 0} {
 # Set top module
 # --------------------------------------------------------------------
 
-set_property top srl16e_delay_line [current_fileset]
+set_property top top_even_odd_symmetric_systolic_fir [current_fileset]
 
 update_compile_order -fileset sources_1
 update_compile_order -fileset sim_1
