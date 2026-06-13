@@ -39,7 +39,6 @@ module top_even_odd_symmetric_systolic_fir #(
     integer symmetry_errors;
     localparam integer PW = XW + CW; // Product width before accumulation
 
-
     /*
     * Parameter and coefficient initialization.
     *
