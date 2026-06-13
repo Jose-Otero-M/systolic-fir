@@ -103,35 +103,95 @@ module top_even_odd_symmetric_systolic_fir #(
 
 
     function integer ceil_div
-        input integer dividend;
-        input integer divisor;
+        input integer numerator;
+        input integer denominator;
 
         begin
-            if ((dividend <= 0) || (divisor <= 0)) begin
+            if ((numerator <= 0) || (denominator <= 0)) begin
                 ceil_div = 0;
             end
-            else if((dividend % divisor) == 0) begin
-                ceil_div = dividend / divisor;
+            else if((numerator % denominator) == 0) begin
+                ceil_div = numerator / denominator;
             end 
             else  begin
-                ceil_div = (dividend / divisor) + 1;
+                ceil_div = (numerator / denominator) + 1;
             end
         end
     endfunction
 
 
     localparam integer DSP_STAGES = ceil_div(NTAPS, 2); // Number of DSP stages in the systolic array
-    wire signed [ACCW-1:0] ACCUMULATOR_CHAIN [0:NTAPS-1];
-    
-    localparam integer SRL16_TOTAL_DELAYS = NTAPS;
-    localparam integer SRL16_TOTAL_STAGES = ceil_div(SRL16_TOTAL_DELAYS, 16);
-    localparam integer SRL16_CONTROL_DEPTH_WIDTH = 4;
-    //wire  [SRL16_CONTROL_DEPTH_WIDTH-1 : 0] srl16_depth_array [0 : SRL16_TOTAL_STAGES-1];
-    wire  [0 : (SRL16_TOTAL_STAGES * SRL16_CONTROL_DEPTH_WIDTH) - 1] srl16_depth_array;
-    
-    
-    //localparam integer LAST_SRL16 = ( (SRL16_TOTAL_DELAYS - (SRL16_COMPLEAT_STAGES * 16)) <= 0) ? 0 : (SRL16_TOTAL_DELAYS - (SRL16_COMPLEAT_STAGES * 16));
+    localparam integer CENTER_TAP_IDX = ceil_div(NTAPS, 2) - 1; // Center tap only when there are an odd sequence of taps
+    localparam integer            there_are_odd_taps = (NTAPS % 2 != 0) ? 1 : 0; // Odd taps flag
 
+    wire signed [XW-1:0]   x_a               [0:DSP_STAGES-1];
+    wire signed [XW-1:0]   x_b               [0:DSP_STAGES-1];
+    wire signed [ACCW-1:0] accumulator_chain [0:DSP_STAGES];
+
+
+    genvar j;
+
+    generate
+        if (there_are_odd_taps == 1) begin
+            for (j = 0; j < DSP_STAGES-1; j = j + 1) begin
+                dsp_unit #(
+                    .XW(XW),
+                    .CW(CW),
+                    .NTAPS(NTAPS),
+                    .GUARD_BITS(GUARD_BITS),
+                    .ACCW(ACCW)
+                ) u_dsp_x(
+                    .clk(clk),
+                    .rst(rst),
+                    .en(en),
+                    .x_a(x_a[j]),
+                    .x_b(x_b[j]),
+                    .coef_in(coef_array[j]),
+                    .mac_in(accumulator_chain[2*j]),
+                    .mac_out(accumulator_chain[2*j+1])
+                );
+            end
+
+            last_dsp_unit_for_odd_taps #(
+                .XW(XW),
+                .CW(CW),
+                .NTAPS(NTAPS),
+                .GUARD_BITS(GUARD_BITS),
+                .ACCW(ACCW)
+            ) u_dsp_center(
+                .clk(clk),
+                .rst(rst),
+                .en(en),
+                .x(x),
+                .coef_in(coef_array[CENTER_TAP_IDX]),
+                .mac_in(accumulator_chain[DSP_STAGES]),
+                .mac_out(accumulator_chain[DSP_STAGES])
+            );
+
+        end
+
+        else begin
+            for (j = 0; j < DSP_STAGES; j = j + 1) begin
+                dsp_unit #(
+                    .XW(XW),
+                    .CW(CW),
+                    .NTAPS(NTAPS),
+                    .GUARD_BITS(GUARD_BITS),
+                    .ACCW(ACCW)
+                ) u_dsp_x(
+                    .clk(clk),
+                    .rst(rst),
+                    .en(en),
+                    .x_a(x_a[j]),
+                    .x_b(x_b[j]),
+                    .coef_in(coef_array[j]),
+                    .mac_in(accumulator_chain[2*j]),
+                    .mac_out(accumulator_chain[2*j+1])
+                );
+            end
+        end
+
+    endgenerate
 
 
 endmodule
