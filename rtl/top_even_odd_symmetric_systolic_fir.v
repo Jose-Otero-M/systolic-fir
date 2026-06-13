@@ -101,97 +101,117 @@ module top_even_odd_symmetric_systolic_fir #(
         end
     end
 
+    localparam integer PAIRS       = NTAPS / 2;
+    localparam integer HAS_CENTER  = NTAPS % 2;
+    localparam integer DSP_STAGES  = PAIRS + HAS_CENTER;
+    localparam integer CENTER_IDX  = PAIRS;
 
-    function integer ceil_div
-        input integer numerator;
-        input integer denominator;
+    wire ce;
+    assign ce = en & data_valid;
 
-        begin
-            if ((numerator <= 0) || (denominator <= 0)) begin
-                ceil_div = 0;
-            end
-            else if((numerator % denominator) == 0) begin
-                ceil_div = numerator / denominator;
-            end 
-            else  begin
-                ceil_div = (numerator / denominator) + 1;
-            end
-        end
-    endfunction
+    // Duplicate tap delay: z^-NTAPS
+    wire signed [XW-1:0] x_duplicate;
 
+    srl16e_delay_line #(
+        .DATA_W(XW),
+        .DELAY (NTAPS)
+    ) u_duplicate_delay (
+        .clk  (clk),
+        .ce   (ce),
+        .din  (x_in),
+        .dout (x_duplicate)
+    );
 
-    localparam integer DSP_STAGES = ceil_div(NTAPS, 2); // Number of DSP stages in the systolic array
-    localparam integer CENTER_TAP_IDX = ceil_div(NTAPS, 2) - 1; // Center tap only when there are an odd sequence of taps
-    localparam integer            there_are_odd_taps = (NTAPS % 2 != 0) ? 1 : 0; // Odd taps flag
+    // Horizontal systolic sample chain.
+    // One entry per symmetric pair stage.
+    wire signed [XW-1:0] x_chain [0:PAIRS];
 
-    wire signed [XW-1:0]   x_a               [0:DSP_STAGES-1];
-    wire signed [XW-1:0]   x_b               [0:DSP_STAGES-1];
-    wire signed [ACCW-1:0] accumulator_chain [0:DSP_STAGES];
+    // Accumulator cascade.
+    // One accumulator node per DSP stage plus initial zero.
+    wire signed [ACCW-1:0] acc_chain [0:DSP_STAGES];
 
+    assign x_chain[0]   = x_in;
+    assign acc_chain[0] = {ACCW{1'b0}};
 
     genvar j;
 
     generate
-        if (there_are_odd_taps == 1) begin
-            for (j = 0; j < DSP_STAGES-1; j = j + 1) begin
-                dsp_unit #(
-                    .XW(XW),
-                    .CW(CW),
-                    .NTAPS(NTAPS),
-                    .GUARD_BITS(GUARD_BITS),
-                    .ACCW(ACCW)
-                ) u_dsp_x(
-                    .clk(clk),
-                    .rst(rst),
-                    .en(en),
-                    .x_a(x_a[j]),
-                    .x_b(x_b[j]),
-                    .coef_in(coef_array[j]),
-                    .mac_in(accumulator_chain[2*j]),
-                    .mac_out(accumulator_chain[2*j+1])
-                );
-            end
 
-            last_dsp_unit_for_odd_taps #(
-                .XW(XW),
-                .CW(CW),
-                .NTAPS(NTAPS),
-                .GUARD_BITS(GUARD_BITS),
-                .ACCW(ACCW)
-            ) u_dsp_center(
-                .clk(clk),
-                .rst(rst),
-                .en(en),
-                .x(x),
-                .coef_in(coef_array[CENTER_TAP_IDX]),
-                .mac_in(accumulator_chain[DSP_STAGES]),
-                .mac_out(accumulator_chain[DSP_STAGES])
+        /*
+        * Symmetric pair stages:
+        *
+        * Even NTAPS = 8:
+        *   j = 0,1,2,3
+        *
+        * Odd NTAPS = 9:
+        *   j = 0,1,2,3
+        *
+        * Each stage implements:
+        *
+        *   h[j] * (x_a + x_b)
+        *
+        */
+        for (j = 0; j < PAIRS; j = j + 1) begin : gen_symmetric_pair_stage
+
+            dsp_symmetric_systolic_stage #(
+                .XW   (XW),
+                .CW   (CW),
+                .ACCW (ACCW)
+            ) u_dsp_pair (
+                .clk       (clk),
+                .rst       (rst),
+                .ce        (ce),
+
+                .x_forward_in  (x_chain[j]),
+                .x_duplicate_in(x_duplicate),
+                .x_forward_out (x_chain[j+1]),
+
+                .coef_in   (coef_array[j]),
+
+                .acc_in    (acc_chain[j]),
+                .acc_out   (acc_chain[j+1])
             );
 
         end
 
-        else begin
-            for (j = 0; j < DSP_STAGES; j = j + 1) begin
-                dsp_unit #(
-                    .XW(XW),
-                    .CW(CW),
-                    .NTAPS(NTAPS),
-                    .GUARD_BITS(GUARD_BITS),
-                    .ACCW(ACCW)
-                ) u_dsp_x(
-                    .clk(clk),
-                    .rst(rst),
-                    .en(en),
-                    .x_a(x_a[j]),
-                    .x_b(x_b[j]),
-                    .coef_in(coef_array[j]),
-                    .mac_in(accumulator_chain[2*j]),
-                    .mac_out(accumulator_chain[2*j+1])
-                );
-            end
+        /*
+        * Center tap stage.
+        *
+        * Only exists when NTAPS is odd.
+        *
+        * Example:
+        *
+        * NTAPS = 9:
+        *   center coefficient = h4
+        *
+        * NTAPS = 33:
+        *   center coefficient = h16
+        *
+        */
+        if (HAS_CENTER != 0) begin : gen_center_stage
+
+            dsp_center_systolic_stage #(
+                .XW   (XW),
+                .CW   (CW),
+                .ACCW (ACCW)
+            ) u_dsp_center (
+                .clk     (clk),
+                .rst     (rst),
+                .ce      (ce),
+
+                .x_in    (x_duplicate),
+                .coef_in (coef_array[CENTER_IDX]),
+
+                .acc_in  (acc_chain[PAIRS]),
+                .acc_out (acc_chain[PAIRS+1])
+            );
+
         end
 
     endgenerate
+
+    wire signed [ACCW-1:0] acc_final;
+    assign acc_final = acc_chain[DSP_STAGES];
 
 
 endmodule
