@@ -11,7 +11,7 @@ module top_even_odd_symmetric_systolic_fir #(
     parameter integer USE_SYMMETRY     =  1, // Whether to use symmetric coefficients optimization
     parameter integer STRICT_SYMMETRY  =  1, 
 
-    parameter integer USE_SRL16E       =  1,
+    // parameter integer USE_SRL16E       =  1,
 
     parameter integer SATURATE_OUTPUT  =  1,
     parameter integer ROUND_TO_NEAREST =  1, // Whether to round to nearest after shifting
