@@ -25,6 +25,9 @@ module dsp_center_systolic_stage #(
     reg signed [CW-1:0]     coef_reg;
     reg signed [PROD_W-1:0] product_reg;
 
+    reg x_valid_reg;
+    reg product_valid_reg;
+
     wire signed [ACCW-1:0] product_ext;
 
     assign product_ext = {{(ACCW-PROD_W){product_reg[PROD_W-1]}}, product_reg};
