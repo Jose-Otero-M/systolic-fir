@@ -111,6 +111,16 @@ module top_even_odd_symmetric_systolic_fir #(
     // Duplicate tap delay: z^-NTAPS
     wire signed [XW-1:0] x_duplicate;
 
+
+    wire x_duplicate_valid;
+
+    wire x_valid_chain   [0:PAIRS];
+    wire acc_valid_chain [0:DSP_STAGES];
+
+    assign x_valid_chain[0]   = 1'b1;
+    assign acc_valid_chain[0] = 1'b1;
+
+
     srl16e_delay_line #(
         .DATA_W(XW),
         .DELAY (NTAPS)
@@ -165,10 +175,17 @@ module top_even_odd_symmetric_systolic_fir #(
                 .x_duplicate_in(x_duplicate),
                 .x_forward_out (x_chain[j+1]),
 
+                .x_forward_valid_in   (x_valid_chain[j]),
+                .x_duplicate_valid_in (x_duplicate_valid),
+                .x_forward_valid_out  (x_valid_chain[j+1]),
+
                 .coef_in   (coef_array[j]),
 
                 .acc_in    (acc_chain[j]),
-                .acc_out   (acc_chain[j+1])
+                .acc_out   (acc_chain[j+1]),
+
+                .acc_valid_in         (acc_valid_chain[j]),
+                .acc_valid_out        (acc_valid_chain[j+1])
             );
 
         end
@@ -202,7 +219,10 @@ module top_even_odd_symmetric_systolic_fir #(
                 .coef_in (coef_array[CENTER_IDX]),
 
                 .acc_in  (acc_chain[PAIRS]),
-                .acc_out (acc_chain[PAIRS+1])
+                .acc_out (acc_chain[PAIRS+1]),
+
+                .acc_valid_in  (acc_valid_chain[PAIRS]),
+                .acc_valid_out (acc_valid_chain[PAIRS+1])
             );
 
         end
