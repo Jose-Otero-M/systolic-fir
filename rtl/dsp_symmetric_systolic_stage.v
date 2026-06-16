@@ -18,7 +18,10 @@ module dsp_symmetric_systolic_stage #(
     input  wire signed [CW-1:0] coef_in,
 
     input  wire signed [ACCW-1:0] acc_in,
-    output reg  signed [ACCW-1:0] acc_out
+    output reg  signed [ACCW-1:0] acc_out,
+
+    input  wire acc_valid_in,
+    output reg  acc_valid_out
 );
 
     localparam integer PREADD_W = XW + 1;
