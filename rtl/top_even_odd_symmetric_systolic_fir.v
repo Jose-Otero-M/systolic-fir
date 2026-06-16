@@ -131,6 +131,16 @@ module top_even_odd_symmetric_systolic_fir #(
         .dout (x_duplicate)
     );
 
+    valid_delay #(
+        .DELAY(NTAPS)
+    ) u_duplicate_valid_delay (
+        .clk  (clk),
+        .rst  (rst),
+        .ce   (ce),
+        .din  (1'b1),
+        .dout (x_duplicate_valid)
+    );
+
     // Horizontal systolic sample chain.
     // One entry per symmetric pair stage.
     wire signed [XW-1:0] x_chain [0:PAIRS];
@@ -216,6 +226,8 @@ module top_even_odd_symmetric_systolic_fir #(
                 .ce      (ce),
 
                 .x_in    (x_duplicate),
+                .x_valid_in    (x_duplicate_valid),
+
                 .coef_in (coef_array[CENTER_IDX]),
 
                 .acc_in  (acc_chain[PAIRS]),
@@ -231,6 +243,8 @@ module top_even_odd_symmetric_systolic_fir #(
 
     wire signed [ACCW-1:0] acc_final;
     assign acc_final = acc_chain[DSP_STAGES];
-
-
+    
+    assign y_out_valid = ce & acc_valid_chain[DSP_STAGES];
+    
+    assign y_out = acc_final[YW-1: 0];
 endmodule
