@@ -89,7 +89,7 @@ if {[llength $xdc_files] > 0} {
 # Set top module
 # --------------------------------------------------------------------
 
-set_property top top_even_odd_symmetric_systolic_fir [current_fileset]
+set_property top top_systolic_fir [current_fileset]
 
 update_compile_order -fileset sources_1
 update_compile_order -fileset sim_1

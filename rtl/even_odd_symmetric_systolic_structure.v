@@ -1,4 +1,4 @@
-module top_even_odd_symmetric_systolic_fir #(
+module even_odd_symmetric_systolic_structure #(
     parameter integer NTAPS            = 33, // Number of FIR taps
     parameter integer XW               = 16, // Input data width
     parameter integer CW               = 16, // Coefficient width (e.g., Q1.15)
@@ -11,10 +11,11 @@ module top_even_odd_symmetric_systolic_fir #(
     parameter integer USE_SYMMETRY     =  1, // Whether to use symmetric coefficients optimization
     parameter integer STRICT_SYMMETRY  =  1, 
 
-    // parameter integer USE_SRL16E       =  1,
+    parameter integer USE_SRL16E       =  1,
 
-    parameter integer SATURATE_OUTPUT  =  1,
-    parameter integer ROUND_TO_NEAREST =  1, // Whether to round to nearest after shifting
+    //parameter integer SATURATE_OUTPUT  =  1,
+    //parameter integer ROUND_TO_NEAREST =  1, // Whether to round to nearest after shifting
+
     parameter         COEF_FILE        = "rrc_taps_q15_energy.mem" // Coefficient file
     )
     
@@ -24,10 +25,10 @@ module top_even_odd_symmetric_systolic_fir #(
     input wire  en, // Clock enable for processing samples
     
     input wire signed [XW-1:0] x_in,        // Input sample
-    input wire                 data_valid,  // Input sample valid strobe
+    input wire                 x_in_valid,  // Input sample valid strobe
     
-    output wire signed [YW-1:0] y_out,      // Output sample
-    output wire                 y_out_valid // Output valid strobe
+    output wire signed [ACCW-1:0] acc_final,      // Output last acc value inside acc_chain
+    output wire                   acc_final_valid // Output valid strobe
     );
     
     
@@ -59,7 +60,7 @@ module top_even_odd_symmetric_systolic_fir #(
             $display("Warning: ACCW may be too small to avoid overflow. Recommended ACCW >= %0d. Given: %0d", PW + $clog2(NTAPS) + GUARD_BITS, ACCW);
             $finish;
         end
-
+/*
         if (SHIFT < 0) begin
             $display("Error: SHIFT must be non-negative. Given: %0d", SHIFT);
             $finish;
@@ -69,7 +70,7 @@ module top_even_odd_symmetric_systolic_fir #(
             $display("Error: SHIFT must be less than ACCW to avoid shifting out all bits. Given: SHIFT=%0d, ACCW=%0d", SHIFT, ACCW);
             $finish;
         end
-
+*/
         for (i = 0; i < NTAPS; i = i + 1) begin
             coef_array[i] = {CW{1'b0}}; // Default to zero
         end
@@ -106,7 +107,7 @@ module top_even_odd_symmetric_systolic_fir #(
     localparam integer CENTER_IDX  = PAIRS;
 
     wire ce;
-    assign ce = en & data_valid;
+    assign ce = en & x_in_valid;
 
     // Duplicate tap delay: z^-NTAPS
     wire signed [XW-1:0] x_duplicate;
@@ -225,8 +226,8 @@ module top_even_odd_symmetric_systolic_fir #(
                 .rst     (rst),
                 .ce      (ce),
 
-                .x_in    (x_duplicate),
-                .x_valid_in    (x_duplicate_valid),
+                .x_in       (x_duplicate),
+                .x_valid_in (x_duplicate_valid),
 
                 .coef_in (coef_array[CENTER_IDX]),
 
@@ -241,10 +242,78 @@ module top_even_odd_symmetric_systolic_fir #(
 
     endgenerate
 
-    wire signed [ACCW-1:0] acc_final;
     assign acc_final = acc_chain[DSP_STAGES];
-    
-    assign y_out_valid = ce & acc_valid_chain[DSP_STAGES];
-    
-    assign y_out = acc_final[YW-1: 0];
+
+    assign acc_final_valid = ce & acc_valid_chain[DSP_STAGES];
+
+
+    round_shift #(
+        .XW(XW),
+        .YW(YW),
+        .ACCW(ACCW),
+        .SHIFT(SHIFT),
+        .SATURATE_OUTPUT(SATURATE_OUTPUT),
+        .ROUND_TO_NEAREST(ROUND_TO_NEAREST)
+    ) u_round_shift(
+        .clk(clk)
+        .rst(rst),
+        .
+    );
+
+
+    reg signed [ACCW-1:0] acc_final;
+    reg signed [ACCW-1:0] acc_final_shifted;
+    reg signed [ACCW-1:0] round_bias;
+
+    reg signed [ACCW:0] acc_final_ext; // Extended acc.
+    reg signed [ACCW:0] bias_ext;      // Extended bias.
+    reg signed [ACCW:0] mag_ext;       // Extended mag.
+    reg signed [ACCW:0] scaled_ext;    // Extended scaled.
+
+    always @(*) begin
+        acc_final = acc_chain[DSP_STAGES];
+        y_out_valid = ce & acc_valid_chain[DSP_STAGES];
+
+        if ((ROUND_TO_NEAREST != 0) && (SHIFT > 0)) begin
+            acc_final_ext = {acc_final[ACCW-1], acc_final}; // keeps the sign of acc_final and hold the acc_final value
+
+            bias_ext = {{ACCW{1'b0}}, 1'b1};      // Numeric value = 1 with width (ACCW+1)
+            bias_ext = bias_ext <<< (SHIFT - 1);
+
+            round_bias = bias_ext[ACCW-1:0];
+
+            if (acc_final_ext < 0) begin
+                mag_ext           = -acc_final_ext;
+                scaled_ext        = (mag_ext + bias_ext) >>> SHIFT;
+                acc_final_shifted = -scaled_ext[ACCW-1:0];
+            end
+            else begin
+                scaled_ext = (acc_ext + bias_ext) >>> SHIFT;
+                acc_final_shifted = scaled_ext[ACCW-1:0];
+            end
+        end
+        else if (SHIFT > 0) begin
+            acc_final_shifted = acc_final >>> SHIFT;
+        end
+        else begin
+            acc_final_shifted = acc_final;
+        end
+    end
+
+    function automatic signed [YW-1:0] sat_y;
+        input signed [ACCW-1:0] v;
+        reg signed [YW-1:0] maxv, minv;
+        begin
+            maxv = {1'b0, {(YW-1){1'b1}}};
+            minv = {1'b1, {(YW-1){1'b0}}};
+            if (v > maxv)      sat_y = maxv;
+            else if (v < minv) sat_y = minv;
+            else               sat_y = v[YW-1:0];
+        end
+    endfunction
+
+    always @(posedge clk) begin
+        
+    end
+
 endmodule
