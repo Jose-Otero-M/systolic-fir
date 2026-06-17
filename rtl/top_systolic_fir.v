@@ -24,7 +24,7 @@ module top_systolic_fir #(
     input wire  en, // Clock enable for processing samples
     
     input wire signed [XW-1:0] x_in,        // Input sample
-    input wire                 data_valid,  // Input sample valid strobe
+    input wire                 x_in_valid,  // Input sample valid strobe
     
     output wire signed [YW-1:0] y_out,      // Output sample
     output wire                 y_out_valid // Output valid strobe
@@ -64,10 +64,10 @@ module top_systolic_fir #(
         .SATURATE_OUTPUT(SATURATE_OUTPUT),
         .ROUND_TO_NEAREST(ROUND_TO_NEAREST)
     ) u_round_shift(
-        .clk(clk)
+        .clk(clk),
         .rst(rst),
         .en(en),
-        .acc_fianl(acc_final),
+        .acc_final(acc_final),
         .acc_final_valid(acc_final_valid),
         .y_out(y_out),
         .y_out_valid(y_out_valid)
