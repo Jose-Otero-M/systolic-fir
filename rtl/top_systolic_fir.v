@@ -1,5 +1,5 @@
 module top_systolic_fir #(
-    parameter integer NTAPS            = 33, // Number of FIR taps
+    parameter integer NTAPS            = 5, // Number of FIR taps
     parameter integer XW               = 16, // Input data width
     parameter integer CW               = 16, // Coefficient width (e.g., Q1.15)
     parameter integer YW               = 16, // Output data width
@@ -16,7 +16,7 @@ module top_systolic_fir #(
     parameter integer SATURATE_OUTPUT  =  1,
     parameter integer ROUND_TO_NEAREST =  1, // Whether to round to nearest after shifting
 
-    parameter         COEF_FILE        = "rrc_taps_q15_energy.mem" // Coefficient file
+    parameter         COEF_FILE        = "coef_test.mem" // Coefficient file
 )
 (
     input wire clk, // Clock
